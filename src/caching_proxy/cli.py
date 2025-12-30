@@ -1,7 +1,12 @@
 import argparse
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent))
 
 from caching_proxy.cache import cache
 from caching_proxy.config import settings
+from caching_proxy.server import run_server
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
 def run_proxy(args):
     print("Running Caching Proxy Server... on port %s" % args.port)
     print("Requests will be proxied from %s" % args.origin)
+    run_server(args)
 
 
 def clear_cache(args):
