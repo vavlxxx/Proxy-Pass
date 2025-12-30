@@ -19,5 +19,15 @@ class ProxyConfig(BaseSettings):
         "upgrade",
     }
 
+    CACHEABLE_METHODS: set[str] = {
+        "GET",
+        "HEAD",
+    }
+
+    VARY_HEADERS: set[str] = {
+        "authorization",
+        "accept-language",
+    }
+
 
 settings = ProxyConfig()
