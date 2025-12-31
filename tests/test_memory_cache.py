@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from caching_proxy.cache import InMemoryCache
+from src.caching_proxy.cache import InMemoryCache
 
 
 @pytest.fixture

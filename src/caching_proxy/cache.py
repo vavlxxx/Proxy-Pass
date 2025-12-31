@@ -1,7 +1,7 @@
 import time
 from typing import Any, Hashable
 
-from caching_proxy.config import settings
+from src.caching_proxy.config import settings
 
 
 class InMemoryCache:
@@ -13,16 +13,21 @@ class InMemoryCache:
         if not entry:
             return None
 
-        if entry[settings.CACHE_DEFAULT_KEY_EXPIRES_AT] < time.time():
+        ttl = entry[settings.CACHE_DEFAULT_KEY_TTL]
+        if ttl > 0 and entry[settings.CACHE_DEFAULT_KEY_EXPIRES_AT] < time.time():
             del self._store[key]
             return None
 
         return entry[settings.CACHE_DEFAULT_KEY_VALUE]
 
     def setval(self, key: Hashable, value: Any, ttl: int) -> None:
+        if ttl < 0:
+            ttl = 0
+
         self._store[key] = {
             settings.CACHE_DEFAULT_KEY_VALUE: value,
             settings.CACHE_DEFAULT_KEY_EXPIRES_AT: time.time() + ttl,
+            settings.CACHE_DEFAULT_KEY_TTL: ttl,
         }
 
     def delval(self, key: Hashable) -> None:

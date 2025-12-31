@@ -2,11 +2,11 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from caching_proxy.cache import cache
-from caching_proxy.config import settings
-from caching_proxy.server import run_server
+from src.caching_proxy.cache import cache
+from src.caching_proxy.config import settings
+from src.caching_proxy.server import run_server
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--ttl",
         type=int,
         default=settings.CACHE_DEFAULT_TTL,
-        help="TTL for cache entries. Default value is %s" % settings.CACHE_DEFAULT_TTL,
+        help="TTL for cache entries. Zero means no TTL. Negative values automatically set the TTL to 0. Default value is %s"
+        % settings.CACHE_DEFAULT_TTL,
     )
     parser_run.set_defaults(func=run_proxy)
     parser_clear.set_defaults(func=clear_cache)
@@ -52,8 +53,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_proxy(args):
-    print("Running Caching Proxy Server... on port %s" % args.port)
-    print("Requests will be proxied from %s" % args.origin)
     run_server(args)
 
 

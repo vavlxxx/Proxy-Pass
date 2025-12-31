@@ -1,36 +1,36 @@
-from urllib.parse import parse_qsl, urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode
 
 from fastapi import Request
-from fastapi.datastructures import Headers
 
-from caching_proxy.config import settings
-
-
-def clean_headers(headers: dict) -> dict:
-    headers.pop("host", None)
-    filtered_headers = {k: v for k, v in headers.items() if k.lower() not in settings.HOP_BY_HOP_HEADERS}
-    return filtered_headers
+from src.caching_proxy.config import settings
 
 
-def normalize_url(url: str) -> str:
-    parsed = urlparse(url)
-    query = urlencode(sorted(parse_qsl(parsed.query)))
-    return parsed._replace(query=query).geturl()
+class CachingHelper:
+    @staticmethod
+    def clean_headers(headers: dict) -> dict:
+        headers = dict(headers)
+        headers.pop("host", None)
+        return {k: v for k, v in headers.items() if k.lower() not in settings.HOP_BY_HOP_HEADERS}
 
+    @staticmethod
+    def normalize_query_params(query_string: str) -> str:
+        if not query_string:
+            return ""
+        params = parse_qsl(query_string)
+        return urlencode(sorted(params))
 
-def extract_vary_headers(headers: Headers) -> tuple:
-    return tuple((h, headers.get(h)) for h in settings.VARY_HEADERS if headers.get(h) is not None)
+    @staticmethod
+    def extract_request_components(request: Request) -> tuple[str, dict]:
+        path = request.url.path.lstrip("/")
+        query_params = dict(request.query_params)
+        return path, query_params
 
+    @staticmethod
+    def make_cache_key(request: Request) -> str:
+        path, query_params = CachingHelper.extract_request_components(request)
+        normalized_query = CachingHelper.normalize_query_params(request.url.query)
+        full_path = f"/{path}"
+        if normalized_query:
+            full_path += f"?{normalized_query}"
 
-def make_cache_key(request: Request) -> tuple | None:
-    if request.method not in settings.CACHEABLE_METHODS:
-        return None
-
-    url = normalize_url(str(request.url))
-    vary = extract_vary_headers(request.headers)
-
-    return (
-        request.method,
-        url,
-        vary,
-    )
+        return f"{request.method} {full_path}"
