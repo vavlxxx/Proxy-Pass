@@ -8,7 +8,7 @@ import httpx
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.caching_proxy.config import settings
-from src.caching_proxy.schemas import AppConfig
+from src.caching_proxy.schemas import AppConfig, AppStatus
 from src.caching_proxy.server import run_server
 from src.caching_proxy.utils import ConfigHelper
 
@@ -38,6 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
         "keys",
         help="Displays all keys stored in the cache",
     )
+    parser_health = subparsers.add_parser(
+        "health",
+        help="Displays basic info about running proxy server",
+    )
+    parser_health.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        required=False,
+        help="Port on which the server runnning. If port is not specified, displays all running servers",
+    )
     parser_run.add_argument(
         "-d",
         "--detached",
@@ -66,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
         % settings.CACHE_DEFAULT_TTL,
     )
     parser_keys.set_defaults(func=show_keys)
+    parser_health.set_defaults(func=status_proxy)
     parser_stop.set_defaults(func=stop_proxy)
     parser_run.set_defaults(func=run_proxy)
     parser_clear.set_defaults(func=clear_cache)
@@ -112,23 +124,35 @@ def run_proxy(args):
     run_server(args)
 
 
+def status_proxy(args):
+    config: AppConfig = ConfigHelper.read_config()
+    url = f"http://{config.host}:{config.port}/{settings.ADMIN_API_PREFIX}/__health"
+    resp = httpx.get(url, headers=settings.HTTPX_HEADERS)
+    data = resp.json()
+    status = AppStatus.model_validate(data)
+    print("Proxy Server is running:")
+    print(f"HOST: http://{status.host}:{status.port}")
+    print(f"ORIGIN: {status.origin}")
+    print(f"Cache TTL: {status.ttl}")
+
+
 def stop_proxy(args):
     config: AppConfig = ConfigHelper.read_config()
-    url = f"http://{config.host}:{config.port}/__shutdown"
+    url = f"http://{config.host}:{config.port}/{settings.ADMIN_API_PREFIX}/__shutdown"
     _ = httpx.post(url, headers=settings.HTTPX_HEADERS)
     print("Proxy Server has been stopped...")
 
 
 def clear_cache(args):
     config: AppConfig = ConfigHelper.read_config()
-    url = f"http://{config.host}:{config.port}/__clear"
+    url = f"http://{config.host}:{config.port}/{settings.ADMIN_API_PREFIX}/__clear"
     _ = httpx.post(url, headers=settings.HTTPX_HEADERS)
     print("Proxy Server cache has been cleared")
 
 
 def show_keys(args):
     config: AppConfig = ConfigHelper.read_config()
-    url = f"http://{config.host}:{config.port}/__keys"
+    url = f"http://{config.host}:{config.port}/{settings.ADMIN_API_PREFIX}/__keys"
     resp = httpx.post(url, headers=settings.HTTPX_HEADERS)
     if resp.is_success:
         keys = resp.json().get("keys", [])

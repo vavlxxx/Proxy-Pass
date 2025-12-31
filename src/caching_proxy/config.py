@@ -9,6 +9,8 @@ class ProxyConfig(BaseSettings):
     CACHE_DEFAULT_PORT: int = 3000
     CACHE_DEFAULT_HOST: str = "localhost"
 
+    ADMIN_API_PREFIX: str = "/__management"
+
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
 
     @property

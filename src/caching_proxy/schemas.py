@@ -23,3 +23,10 @@ class CachedBucket(BaseModel):
 class AppConfig(BaseModel):
     host: str
     port: int
+
+
+class AppStatus(BaseModel):
+    host: str
+    port: int
+    origin: str
+    ttl: int
