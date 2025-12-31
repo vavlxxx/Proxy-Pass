@@ -2,17 +2,19 @@ from contextlib import asynccontextmanager
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, Request, Response
 
-from src.caching_proxy.cache import cache
 from src.caching_proxy.config import settings
-from src.caching_proxy.logging import configurate_logging, get_logger
+from src.caching_proxy.logconfig import configurate_logging, get_logger
+from src.caching_proxy.middlewares import CacheLoggingMiddleware
+from src.caching_proxy.service import ProxyServiceDep
 from src.caching_proxy.utils import CachingHelper
+
+logger = get_logger("server")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger = get_logger("src")
     async with httpx.AsyncClient(
         timeout=settings.HTTPX_TIMEOUT,
         follow_redirects=settings.HTTPX_FOLLOW_REDIRECTS,
@@ -37,72 +39,31 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+app.add_middleware(CacheLoggingMiddleware)
 
 
 def run_server(args):
     app.state.origin = args.origin.rstrip("/")
     app.state.port = args.port
     app.state.ttl = args.ttl
-
     uvicorn.run(app=app, host=settings.CACHE_DEFAULT_HOST, port=args.port, log_config="logging_config.json")
 
 
-@app.api_route(
-    "/{path:path}",
-    methods=["GET", "HEAD"],
-)
-async def proxy(request: Request, path: str) -> Response:
-    path, query_params = CachingHelper.extract_request_components(request)
+@app.api_route("/{path:path}", methods=["GET", "HEAD"])
+async def proxy(
+    path: str,
+    request: Request,
+    proxy_service: ProxyServiceDep,
+) -> Response:
+    request_components = CachingHelper.extract_request_components(request)
+    cache_key = CachingHelper.make_cache_key(request_components)
 
-    origin_url = app.state.origin
-    target_url = f"{origin_url}/{path}"
-    request_headers = CachingHelper.clean_headers(dict(request.headers))
-    cache_key = CachingHelper.make_cache_key(request)
-
-    cached = cache.getval(cache_key)
-    if cached:
-        headers = dict(cached["headers"])
-        headers["X-Cache"] = "HIT"
-
-        if request.method == "HEAD":
-            headers["Content-Length"] = str(len(cached["body"]))
-
-        return Response(
-            content=cached["body"] if request.method != "HEAD" else b"",
-            status_code=cached["status"],
-            headers=headers,
-        )
-
-    try:
-        resp = await app.state.client.request(
-            method=request.method,
-            url=target_url,
-            params=query_params,
-            headers=request_headers,
-            content=None,
-        )
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            detail=f"Proxy Server error: {str(e)}",
-            status_code=status.HTTP_502_BAD_GATEWAY,
-        )
-
-    response_headers = CachingHelper.clean_headers(dict(resp.headers))
-
-    if resp.status_code in range(200, 300):
-        cache.setval(
-            cache_key,
-            {"status": resp.status_code, "headers": response_headers, "body": resp.content},
-            ttl=app.state.ttl,
-        )
-        response_headers["X-Cache"] = "MISS"
-
-    response_content = resp.content
-    if request.method == "HEAD":
-        response_content = b""
-
-    return Response(
-        content=response_content,
-        status_code=resp.status_code,
-        headers=response_headers,
+    cached_response = proxy_service.get_cached_response(
+        request,
+        cache_key,
+        request.method,
     )
+    if cached_response:
+        return cached_response
+
+    return await proxy_service.fetch_from_origin(request_components)

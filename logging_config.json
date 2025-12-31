@@ -21,39 +21,35 @@
         }
     },
     "loggers": {
-        "src": {
+        "proxy-server": {
+            "handlers": ["stdout","main_file"],
+            "level": "INFO",
+            "propagate": false
+        },
+        "middleware": {
+            "handlers": ["stdout","main_file"],
+            "level": "INFO",
+            "propagate": false
+        },
+        "logger": {
             "handlers": ["stdout","main_file"],
             "level": "INFO",
             "propagate": false
         },
         "uvicorn": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
+            "handlers": [],
             "propagate": false
         },
         "uvicorn.access": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
+            "handlers": [],
             "propagate": false
         },
         "uvicorn.error": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
+            "handlers": [],
             "propagate": false
         },
-        "gunicorn": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
-            "propagate": false
-        },
-        "gunicorn.error": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
-            "propagate": false
-        },
-        "gunicorn.access": {
-            "handlers": ["stdout","main_file"],
-            "level": "INFO",
+        "httpx": {
+            "handlers": [],
             "propagate": false
         }
     },
@@ -63,7 +59,7 @@
             "datefmt": "%Y-%m-%d %H:%M:%S"
         },
         "detailed": {
-            "format": "%(asctime)s :: %(levelname)8s :: %(name)35s :: %(funcName)20s :: %(module)10s:%(lineno)3d :: %(message)s",
+            "format": "%(asctime)s :: %(levelname)8s :: %(name)15s :: %(funcName)10s :: %(module)10s:%(lineno)3d :: %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S"
         }
     },

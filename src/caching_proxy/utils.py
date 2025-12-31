@@ -1,36 +1,40 @@
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import urlencode, urljoin
 
 from fastapi import Request
 
 from src.caching_proxy.config import settings
+from src.caching_proxy.schemas import RequestComponents
 
 
 class CachingHelper:
     @staticmethod
+    def extract_request_components(request: Request) -> RequestComponents:
+        return RequestComponents(
+            headers=CachingHelper.clean_headers(dict(request.headers)),
+            params=dict(request.query_params),
+            path=request.url.path.lstrip("/"),
+            method=request.method,
+        )
+
+    @staticmethod
     def clean_headers(headers: dict) -> dict:
         headers = dict(headers)
-        headers.pop("host", None)
+
+        for header in settings.EXCLUDED_HEADERS:
+            headers.pop(header, None)
+
         return {k: v for k, v in headers.items() if k.lower() not in settings.HOP_BY_HOP_HEADERS}
 
     @staticmethod
-    def normalize_query_params(query_string: str) -> str:
-        if not query_string:
-            return ""
-        params = parse_qsl(query_string)
-        return urlencode(sorted(params))
+    def make_cache_key(request_components: RequestComponents) -> str:
+        path_with_params = request_components.path
+
+        if request_components.params:
+            query_string = urlencode(sorted(request_components.params.items()))
+            path_with_params = f"{path_with_params}?{query_string}"
+
+        return f"{request_components.method} {path_with_params}"
 
     @staticmethod
-    def extract_request_components(request: Request) -> tuple[str, dict]:
-        path = request.url.path.lstrip("/")
-        query_params = dict(request.query_params)
-        return path, query_params
-
-    @staticmethod
-    def make_cache_key(request: Request) -> str:
-        path, query_params = CachingHelper.extract_request_components(request)
-        normalized_query = CachingHelper.normalize_query_params(request.url.query)
-        full_path = f"/{path}"
-        if normalized_query:
-            full_path += f"?{normalized_query}"
-
-        return f"{request.method} {full_path}"
+    def make_absolute_url(base: str, path: str) -> str:
+        return urljoin(base, path).rstrip("/")
