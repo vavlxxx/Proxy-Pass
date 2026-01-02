@@ -170,7 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser_keys.set_defaults(func=show_keys)
 
     parser_health = subparsers.add_parser("health", help="Displays basic info about running proxy server")
-    parser_health.add_argument(*port_arg["flags"], **{k: v for k, v in port_arg.items() if k != "flags"}, required=True)
+    parser_health.add_argument(*port_arg["flags"], **{k: v for k, v in port_arg.items() if k != "flags"}, required=False)
     parser_health.set_defaults(func=status_proxy)
 
     return parser

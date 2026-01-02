@@ -47,28 +47,21 @@ class ProxyConfig(BaseSettings):
     HTTPX_MAX_CONNECTIONS: int = 100
     HTTPX_MAX_KEEP_ALIVE_CONNECTIONS: int = 20
 
-    EXCLUDED_HEADERS: list[str] = [
-        "if-none-match",
-        "if-modified-since",
-        "content-length",
-        "transfer-encoding",
-        "content-encoding",
+    REQUEST_EXCLUDED_HEADERS: list[str] = [
+        "host",
         "connection",
         "keep-alive",
         "proxy-connection",
-        "upgrade",
-        "host",
+        "transfer-encoding",
     ]
-    HOP_BY_HOP_HEADERS: set[str] = {
+
+    RESPONSE_EXCLUDED_HEADERS: list[str] = [
         "connection",
         "keep-alive",
-        "proxy-authenticate",
-        "proxy-authorization",
-        "te",
-        "trailers",
+        "proxy-connection",
         "transfer-encoding",
-        "upgrade",
-    }
+        "content-length",
+    ]
 
 
 settings = ProxyConfig()

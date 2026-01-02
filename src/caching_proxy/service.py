@@ -1,9 +1,7 @@
-from io import BytesIO
 from typing import Annotated
 
 import httpx
 from fastapi import Depends, HTTPException, Request, Response, status
-from fastapi.responses import StreamingResponse
 
 from src.caching_proxy.cache import Cache, cache
 from src.caching_proxy.logconfig import get_logger
@@ -51,7 +49,7 @@ class ProxyService:
         )
 
         try:
-            resp = await self.client.request(
+            resp: httpx.Response = await self.client.request(
                 method=request_components.method,
                 url=target_url,
                 params=request_components.params,
@@ -81,18 +79,35 @@ class ProxyService:
                 detail=f"Proxy error: {exc.__class__.__name__}",
             )
 
+        response_headers = CachingHelper.clean_response_headers_for_cache(dict(resp.headers))
+
+        if self._is_response_was_decoded(resp):
+            response_headers.pop("content-encoding", None)
+            logger.debug("Removed content-encoding because httpx decoded the content")
+
         if resp.status_code in range(status.HTTP_200_OK, status.HTTP_300_MULTIPLE_CHOICES):
             cache_key = CachingHelper.make_cache_key(request_components)
+            resp.headers = httpx.Headers(response_headers)
             self._save_to_cache(cache_key, resp)
 
-        cleaned_headers = CachingHelper.clean_headers(dict(resp.headers))
-        cleaned_headers["X-Cache"] = "MISS"
+        response_headers["X-Cache"] = "MISS"
 
         return Response(
             content=resp.content,
             status_code=resp.status_code,
-            headers=cleaned_headers,
+            headers=response_headers,
         )
+
+    def _is_response_was_decoded(self, response: httpx.Response) -> bool:
+        content_encoding = response.headers.get("content-encoding", "").lower()
+        content_length = response.headers.get("content-length")
+        actual_content_length = len(response.content)
+
+        logger.debug("Content-Encoding: %s", "N/A" if not content_encoding else content_encoding)
+        logger.debug("Content-Length: %s", content_length)
+        logger.debug("Actual length: %s", actual_content_length)
+
+        return content_encoding in ["gzip", "deflate", "br"] and content_length and int(content_length) != actual_content_length
 
     def _is_conditional_request(
         self,
@@ -134,60 +149,29 @@ class ProxyService:
         status_code: int,
         headers: dict,
         method: str,
-    ) -> Response | StreamingResponse:
-        clean_headers = {
-            k: v
-            for k, v in headers.items()
-            if k.lower()
-            not in [
-                "content-length",
-                "transfer-encoding",
-                "content-encoding",
-            ]
-        }
-        clean_headers["X-Cache"] = "HIT"
+    ) -> Response:
+        headers["X-Cache"] = "HIT"
 
         if method == "HEAD":
-            clean_headers["Content-Length"] = str(len(body))
+            headers["Content-Length"] = str(len(body))
             return Response(
                 content=b"",
                 status_code=status_code,
-                headers=clean_headers,
+                headers=headers,
             )
 
-        return StreamingResponse(
-            content=self._iter_bytes(body),
+        return Response(
+            content=body,
             status_code=status_code,
-            headers=clean_headers,
-            media_type=headers.get("content-type"),
+            headers=headers,
         )
 
-    @staticmethod
-    def _iter_bytes(data: bytes, chunk_size: int = 8192):
-        stream = BytesIO(data)
-        while chunk := stream.read(chunk_size):
-            yield chunk
-
     def _save_to_cache(self, cache_key: str, response: httpx.Response) -> None:
-        cacheable_headers = {
-            k: v
-            for k, v in response.headers.items()
-            if k.lower()
-            not in [
-                "content-length",
-                "transfer-encoding",
-                "content-encoding",
-                "connection",
-                "keep-alive",
-                "proxy-connection",
-            ]
-        }
-
         self._cache.setval(
             cache_key,
             DataToCache(
                 status_code=response.status_code,
-                headers=cacheable_headers,
+                headers=dict(response.headers),
                 body=response.content,
             ),
             ttl=self.ttl,

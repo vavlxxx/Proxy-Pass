@@ -12,20 +12,19 @@ class CachingHelper:
     @staticmethod
     def extract_request_components(request: Request) -> RequestComponents:
         return RequestComponents(
-            headers=CachingHelper.clean_headers(dict(request.headers)),
+            headers=CachingHelper.clean_request_headers(dict(request.headers)),
             params=dict(request.query_params),
             path=request.url.path.lstrip("/"),
             method=request.method,
         )
 
     @staticmethod
-    def clean_headers(headers: dict) -> dict:
-        headers = dict(headers)
+    def clean_request_headers(headers: dict) -> dict:
+        return {k: v for k, v in headers.items() if k.lower() not in settings.REQUEST_EXCLUDED_HEADERS}
 
-        for header in settings.EXCLUDED_HEADERS:
-            headers.pop(header, None)
-
-        return {k: v for k, v in headers.items() if k.lower() not in settings.HOP_BY_HOP_HEADERS}
+    @staticmethod
+    def clean_response_headers_for_cache(headers: dict) -> dict:
+        return {k: v for k, v in headers.items() if k.lower() not in settings.RESPONSE_EXCLUDED_HEADERS}
 
     @staticmethod
     def make_cache_key(request_components: RequestComponents) -> str:
